@@ -17,6 +17,7 @@ json = import_simplejson()
 try:
     from _ssl import SSLError
 except ImportError:
+    # dummy
     SSLError = timeout
 STREAM_VERSION = 1
 
@@ -65,7 +66,7 @@ class StreamListener(object):
         """Called when stream connection times out"""
         return
     
-    def on_socket_error(self):
+    def on_socket_error(self, exception):
         """ Called when socket error occur. """
         return
 
@@ -124,16 +125,16 @@ class Stream(object):
                     error_counter = 0
                     self._read_loop(resp)
             except (timeout, SSLError):
-                # raise SSLError when time out if use https or ssl
+                # raise SSLError at timeout if use https or ssl
                 if self.listener.on_timeout() == False:
                     break
                 if self.running is False:
                     break
                 conn.close()
                 sleep(self.snooze_time)
-            except socket.error:
+            except socket.error, exception:
                 # raise socket.error when can't connect network or resolve hostname
-                if self.listener.on_socket_error() == False:
+                if self.listener.on_socket_error(exception) == False:
                     break
                 conn.close()
                 sleep(self.retry_time)
