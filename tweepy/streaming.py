@@ -6,7 +6,7 @@ import httplib
 from socket import timeout
 from threading import Thread
 from time import sleep
-import urllib
+import urllib, socket
 
 from tweepy.models import Status
 from tweepy.api import API
@@ -14,7 +14,10 @@ from tweepy.error import TweepError
 
 from tweepy.utils import import_simplejson
 json = import_simplejson()
-
+try:
+    from _ssl import SSLError
+except ImportError:
+    SSLError = timeout
 STREAM_VERSION = 1
 
 
@@ -60,6 +63,10 @@ class StreamListener(object):
 
     def on_timeout(self):
         """Called when stream connection times out"""
+        return
+    
+    def on_socket_error(self):
+        """ Called when socket error occur. """
         return
 
 
@@ -116,13 +123,20 @@ class Stream(object):
                 else:
                     error_counter = 0
                     self._read_loop(resp)
-            except timeout:
+            except (timeout, SSLError):
+                # raise SSLError when time out if use https or ssl
                 if self.listener.on_timeout() == False:
                     break
                 if self.running is False:
                     break
                 conn.close()
                 sleep(self.snooze_time)
+            except socket.error:
+                # raise socket.error when can't connect network or resolve hostname
+                if self.listener.on_socket_error() == False:
+                    break
+                conn.close()
+                sleep(self.retry_time)
             except Exception, exception:
                 # any other exception is fatal, so kill loop
                 break
@@ -136,7 +150,7 @@ class Stream(object):
             raise
 
     def _read_loop(self, resp):
-          while self.running:
+        while self.running:
             if resp.isclosed():
                 break
 
